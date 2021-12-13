@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,18 +10,38 @@ import (
 	"time"
 
 	"github.com/WawinyEdwin/product-api/working/working/handlers"
+	"github.com/gorilla/mux"
 )
 
+//var bindAddress = env.String("BIND_ADDRESS", false, ":9090", "Bind address for the server")
+
+
+
 func main(){
+	fmt.Println("Server Started...")
 	
 	l := log.New(os.Stdout, "product-api", log.LstdFlags)
-	// hh := handlers.NewHello(l)
-	//  gh := handlers.NewGoodbye(l)
+
 	ph := handlers.NewProducts(l)
 	
-	sm := http.NewServeMux()
+	//creates a new serve mux and registers handlers with the gorilla toolkit
+	sm := mux.NewRouter()
 
-	sm.Handle("/", ph)
+	//router for get requests.
+	getRouter := sm.Methods(http.MethodGet).Subrouter()
+	getRouter.HandleFunc("/", ph.GetProducts)
+
+	//router for put requests.
+	putRouter := sm.Methods(http.MethodPut).Subrouter()
+	putRouter.HandleFunc("/{id:[0-9]+}", ph.UpdateProducts)
+	putRouter.Use(ph.MiddlewareValidateProduct)
+
+	//router for post requests
+	postRouter := sm.Methods(http.MethodPost).Subrouter()
+	postRouter.HandleFunc("/", ph.AddProduct)
+	postRouter.Use(ph.MiddlewareValidateProduct)
+
+	// sm.Handle("/products", ph)
 	// sm.Handle("/goodbye", gh)
 
 	s := &http.Server{
@@ -31,7 +52,7 @@ func main(){
 		WriteTimeout: 1*time.Second,
 	}
 
-	//handling theserver so that it does not block
+	//handling the server so that it does not block
 	go func(){
 		err := s.ListenAndServe()
 		if err != nil {
@@ -44,7 +65,7 @@ func main(){
 	signal.Notify(sigChan, os.Kill)
 
 	sig := <- sigChan
-	l.Println("Recieved terminate, graceful shutdown", sig)
+	l.Println("Recieved Terminate, graceful shutdown", sig)
 
 	tc, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	s.Shutdown(tc)
